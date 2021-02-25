@@ -1,0 +1,56 @@
+/* @filename
+*  @version1.0
+*  @date 2021 2.20 14:24
+*
+*  @brief本次例程是用操控寄存器的方法操控STM32的GPIO
+*
+*  @author :HGP
+*/
+/*
+GPIOA_CRL   0x4001 0800 
+GPIOA_CRH   0x4001 0804
+GPIOA_IDR   0x4001 0808
+GPIOA_ODR   0x4001 080c
+GPIOA_BSRR  0x4001 0810
+GPIOA_BRR   0x4001 0814
+
+向内存的某个地址写入16
+*(unsigned int*)0x3333 3333 =16
+
+*/
+#include "stm32f10x.h"
+#define GPIOA_CRL   *(unsigned int*)0x40010800 
+#define GPIOA_CRH   *(unsigned int*)0x40010804
+#define GPIOA_IDR   *(unsigned int*)0x40010808
+#define GPIOA_ODR   *(unsigned int*)0x4001080c
+#define GPIOA_BSRR  *(unsigned int*)0x40010810
+#define GPIOA_BRR   *(unsigned int*)0x40010814
+#define RCC_GPIOA   *(unsigned int*)0x40021018	
+//在通过数据手册给PA5引脚配置参数
+
+
+
+int main(void)
+{
+	
+	RCC_GPIOA |= (1<<2);
+	GPIOA_CRL |= (1<<20);
+	GPIOA_ODR |= (1<<5);
+  while(1);
+}
+void SystemInit()//这里的SystemInit函数是为了让程序不报错
+{
+}
+/*课堂笔记 ：
+1.基本思路：通过寄存器的地址操控GPIO的状态
+GPIO通用的的状态寄存器有GPIO_CRL，GPIO_CRH，GPIO_ODR，GPIO_IDR等
+除此之外还要有配置APB2的使能寄存器APB2ENR，因为IO口外设是挂在APB2之上的。
+向某一位写入0的操作：GPIO_CRH &= ~（1《x）
+写入1的操作：        GPIO_CRH |= （1《x）
+x是具体想要移动的位数
+
+2 时钟框图是很重要的，如果想要开启某个外设，则需要提前打开外设时钟并配置其速度，这些都可以在时钟图中看出
+默认情况下systick系统的时钟是HSI 8MHz，如果想要配置成72Mhz或者其他，则需要通过配置HSE，LSE，LSI等。
+配置时钟关键得有两个寄存器，一个是时钟的分频寄存器，另一个是选择时钟线路的寄存器。
+通过配置即可得到想要的外设的时钟速度和系统时钟。
+*/
