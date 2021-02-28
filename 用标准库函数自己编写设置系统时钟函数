@@ -1,0 +1,67 @@
+#include"stm32f10x.h"
+#include"clock.h"
+#define PLL_TimeOut ((uint32_t) 0x050000)//最大计数函数，函数如果计数到0x0500000，PLL还未准备好，那就放弃。
+ErrorStatus My_WaitPLLStartUp(void);//由于标准库没有等待PLL稳定的函数，所以可以自己编写一个；
+void Set_SysClock72Mhz(void)
+{
+	uint32_t PLL_SYS = 0,FaultTime = 0;//一个关于PLL与SYSCLK转换状态的判断变量。
+	RCC_HSEConfig(RCC_HSE_ON);//打开外部时钟开关；
+	if(RCC_WaitForHSEStartUp() == SUCCESS)//这里用到的是判断HSE是否准备好的库函数。为啥要判断？
+		                                  //因为HSE和PLL一样，打开开关后需要一定时间才能稳定。
+	{
+		FLASH->ACR |= 0x10;
+		FLASH ->ACR &= (~0X03);
+		FLASH->ACR |=(0x02);//内存区的操作，可以不用理解，有兴趣的话可以去ST官网查看关于FLASH的手册
+		
+	    RCC_HCLKConfig(RCC_SYSCLK_Div1);//将AHB的时钟设为系统时钟的1分频；
+		RCC_PCLK1Config(RCC_HCLK_Div2);//将APB2的时钟设为AHB的2分频；
+		RCC_PCLK2Config(RCC_HCLK_Div2);//将APB1的时钟设为AHB的2分频；
+		RCC_PLLConfig(RCC_PLLSource_HSE_Div1,RCC_PLLMul_9);//将SYSCLK设置为PLL9倍频，并设置HSE为PLL时钟源；
+		
+		RCC_PLLCmd(ENABLE);//打开PLL开关；
+		
+		if(My_WaitPLLStartUp() ==SUCCESS)//这里判断PLL是否稳定
+		{
+			RCC_SYSCLKConfig(RCC_SYSCLKSource_PLLCLK);//PLL稳定后选择PLLCLK为SYSCLK的时钟源。
+			
+			do{
+				PLL_SYS = RCC->CFGR & (0x03<<2);//等待PLL转换为SYS是否成功
+				FaultTime ++;
+				
+			}while((FaultTime <=0x50000)&&(PLL_SYS !=0x02));
+			
+		}
+		else{
+			
+			//如果PLL不稳定，这里自己写代码解决。	
+		}
+		
+			
+	}	
+	else {
+		//如果程序运行到这里就证明HSE未能正常工作，可以自己写代码解决
+	}
+}
+
+ErrorStatus My_WaitPLLStartUp(void)//自定义的PLL等待函数
+{
+	__IO uint32_t StartUpCounter = 0;//延时计数变量
+  ErrorStatus status = ERROR; 
+  FlagStatus PLLStatus = RESET;      //检测PLL是否准备好的标志变量
+  do
+  {
+    PLLStatus = RCC_GetFlagStatus(RCC_FLAG_PLLRDY);//获取PLLRDY的状态
+    StartUpCounter++;  
+  } while((StartUpCounter !=  PLL_TimeOut) && (PLLStatus == RESET));
+  
+  if (RCC_GetFlagStatus(RCC_FLAG_HSERDY) != RESET)
+  {
+    status = SUCCESS;
+  }
+  else
+  {
+    status = ERROR;
+  }  
+  return (status);  //PLL如果准备好的话会由硬件电路将PLLRDY置一，由此判断如果准备好的话就返回SUCCESS，否的话返回ERROR
+	
+}
