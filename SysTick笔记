@@ -1,0 +1,77 @@
+#include"stm32f10x.h"
+
+/*配置SYSTICK很简单，只需在SySTick_Config中写入一个不大于2^24次方的数，就可以产生systick中断
+
+1.无需对NVIC进行配置，在SysTick中断服务函数SysTick_Handler中也无需对中断标志进行清零（参考exit外部中断服务函数）
+
+2.要注意的是关于systick其实有两个关键函数，SySTick_Config，SysTick_CLKSourceConfig。SySTick_Config函数是总体给中断
+初始化一下，初始化的过程中它给systick的时钟配置成了默认的AHB时钟，还可以配置成AHB的八分频，这就需要用到SysTick_CLKSourceConfig这个函数
+来给他选择时钟源，在编写代码的时候，如果我们不想用SysTick_Config给我们配置的AHB时钟源，我们可以在写完这个函数之后再写SysTick_CLKSourceConfig(SysTick_CLKSource_HCLK_Div8);即可。
+注意两个函数的顺序一定不能错否则等于给时钟源配了两遍最后还是配成了AHB而非AHB/8
+
+3.其实SysTick属于cpu的外设，而非Soc的内部外设，设计初衷是为了给RTOS当系统时钟，也可以被用来编写一些准时的延时函数。
+
+*/
+#define My_GPIO_Pin  GPIO_Pin_5
+#define My_GPIO_Port GPIOA
+
+void GPIO_Config(void);
+//void NVIC_Config(void);
+void RCC_Config(void);
+void SysTick_Cf(void);
+int main(void)
+{
+RCC_Config();
+GPIO_Config();
+//NVIC_Config();
+SysTick_Cf();
+	
+while(1);//不加while(1)后果很严重^_^
+
+}
+void RCC_Config(void)
+{
+	
+	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA ,ENABLE);
+	
+}
+void GPIO_Config(void)
+{
+GPIO_InitTypeDef GPIO_InitStructure;	
+GPIO_InitStructure.GPIO_Pin = My_GPIO_Pin;
+GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
+GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+GPIO_Init(My_GPIO_Port, &GPIO_InitStructure);	
+GPIO_ResetBits(GPIOA,GPIO_Pin_5);//这里是为了实现PA5灯的亮灭	
+}
+/*void NVIC_Config(void) //不用配置NVIC啦
+{
+NVIC_InitTypeDef NVIC_InitStructure;
+NVIC_PriorityGroupConfig(NVIC_PriorityGroup_1);             //NVIC的中断优先级分组配对
+NVIC_InitStructure.NVIC_IRQChannel = SysTick_IRQn;
+NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 1;   //抢占优先级
+NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;          //子优先级
+NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;             //具体的NVIC与Systick为啥要这么配置可以参考其他详细资料
+NVIC_Init(&NVIC_InitStructure);
+		
+}*/
+void SysTick_Cf(void)
+{
+	//主频是72Mhz，定时时间是100ms，ticks=7200000；ticks最大为2^24
+	SysTick_Config(7200000);
+	
+}
+void SysTick_Handler(void)//这个函数在stm32f10x_it.c中有定义，作者为了方便截取代码把它移动到了main.c中
+{
+    static uint16_t count=0; //静态变量很重要。
+	if(count == 4)
+	{if(GPIO_ReadInputDataBit(GPIOA,GPIO_Pin_5)==1)
+		GPIO_ResetBits(GPIOA,GPIO_Pin_5);
+	else
+		GPIO_SetBits(GPIOA,GPIO_Pin_5);
+	count = 0;
+}
+	else
+		count++;
+	
+}
