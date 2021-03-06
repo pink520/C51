@@ -1,0 +1,81 @@
+
+#include"stm32f10x.h"
+#include "exti.h"
+
+
+#define My_GPIO_Pin  GPIO_Pin_5
+#define My_GPIO_Port GPIOA
+#define My_Exti_Pin  GPIO_Pin_13
+#define My_Exti_pin_Port   GPIOC
+#define My_Pin_Source  GPIO_PinSource13
+#define My_Port_source GPIO_PortSourceGPIOC
+#define My_Exti_Line  EXTI_Line13
+#define My_IRQ    EXTI15_10_IRQn   //宏定义这么多的端口看起来没有必要，但在之后的学习中方便拿来就改
+void My_Init()
+{
+GPIO_InitTypeDef GPIO_InitStructure;
+GPIO_InitTypeDef ExtiPin_InitStructure;
+EXTI_InitTypeDef EXTI_InitStructure;
+NVIC_InitTypeDef NVIC_InitStructure;	//定义需要配置的初始化结构体，其中有NVIC，EXIT，GPIO
+	
+RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO,ENABLE);
+RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA |RCC_APB2Periph_GPIOC,ENABLE);//打开AFIO与GPIO的时钟
+	
+//GPIO_StructInit(&GPIO_InitStructure);
+GPIO_InitStructure.GPIO_Pin = My_GPIO_Pin;
+GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
+GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+GPIO_Init(My_GPIO_Port, &GPIO_InitStructure);      
+//对中断所需的GPIO进行初始化，这里用到的是PC13作为按键检测，按下低电平
+//PA5作为点亮LED的GPIO，高电平有效	
+
+//GPIO_StructInit(&ExtiPin_InitStructure);
+ExtiPin_InitStructure.GPIO_Pin = My_Exti_Pin ;
+ExtiPin_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
+GPIO_Init(My_Exti_pin_Port, &ExtiPin_InitStructure);
+	
+	
+	
+
+GPIO_EXTILineConfig(My_Port_source ,My_Pin_Source);
+EXTI_InitStructure.EXTI_Line = My_Exti_Line ; 
+EXTI_InitStructure.EXTI_Mode = EXTI_Mode_Interrupt;          //这句代码的意思是选择触发的是事件还是中断，这里应是中断
+EXTI_InitStructure.EXTI_Trigger = EXTI_Trigger_Falling; 	//下降沿触发有效
+EXTI_InitStructure.EXTI_LineCmd = ENABLE;                   //打开EXIT的开关
+EXTI_Init(&EXTI_InitStructure);	
+
+
+NVIC_PriorityGroupConfig(NVIC_PriorityGroup_1);             //NVIC的中断优先级分组配对
+NVIC_InitStructure.NVIC_IRQChannel = My_IRQ;
+NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 1;   //抢占优先级
+NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;          //子优先级
+NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;             //具体的NVIC与EXTI为啥要这么配置可以参考其他详细资料
+NVIC_Init(&NVIC_InitStructure);	
+	
+	
+}
+void EXTI15_10_IRQHandler(void)//中断服务函数
+{
+	if(EXTI_GetFlagStatus(EXTI_Line13)!=RESET)            //这个函数是判断程序是否发生了中断，有点鸡肋，不过是起保险作用。
+	{
+		GPIO_SetBits(GPIOA,GPIO_Pin_5);
+	}
+	else{
+		
+	}
+	EXTI_ClearITPendingBit(EXTI_Line13);               //这个函数的作用是清除中断挂起标志位，在执行中断服务函数后如果不进行清除，
+	                                                   //会发生一出中断程序，就会又开启中断的尴尬情况。
+}
+
+/*学习笔记
+中断的概念在51中就有过，不过在32中它功能更加强大，种类也更多，相应的需要配置的寄存器也会更多，这里配置的只是外部中断一种，
+总结一下配置它的流程，1.首先需要将所需的GPIO进行设置，用来检测外部信号，具体的寄存器和功能在手册里有，
+                      2.其次需要配置EXTI，我个人把EXTI理解成，中断信号从GPIO通往cpu的内部外设时经过的线路，在这条线路上有很多寄存器
+                        需要配置，需要注意的是中断挂起位，检测到中断来临就会置一。至于对应的EXTI线路与GPIO的对应关系在手册中有详尽说明。
+                      3.最后的NVIC也很重要，这是需要配置寄存器的最后一部分，主要的是终端优先级分组，抢占优先级与子优先级的定义。
+               
+最后要说的是时钟很重要，要开启AFIO复用端口时钟，开启各个GPIO的时钟。
+
+*/
+
+
